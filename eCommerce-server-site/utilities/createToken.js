@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 
 const createToken = (user, tokenType) => {
   // console.log("💛 user:", user)
-  const payload = { userId: user._id, userName: user.name }
+  const payload = { userId: user.userId, userName: user.userName }
 
   switch (tokenType) {
     case "JWT_ACCESS_TOKEN":

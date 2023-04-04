@@ -58,35 +58,60 @@ const userSchema = new mongoose.Schema({
     default: "User",
   },
 
-  userCreatedAt: {
-    type: Date,
-    default: Date.now,
-  },
-
-  userDeletedAt: {
-    type: Date,
-  },
-
-  userUpdatedAt: {
-    type: Date,
+  userStatus: {
+    isRegistered:{
+      type: Boolean,
+      default: false
+    },
+    isLogin: {
+      type: Boolean,
+      default: false
+    },
+    isAdmin:{
+      type: Boolean,
+      default: function(){return this.role === 'User' ? false : true}
+    },
+    loginTime: {
+      type: Date,
+      default: null
+    },
+    logoutTime: {
+      type: Date,
+      default: null
+    },
+    userCreatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    userDeletedAt: {
+      type: Date,
+      default: null
+    },
+    userUpdatedAt: {
+      type: Date,
+      default: null
+    },
   },
 
   passwordResetToken:{
     type: String,
     unique: true,
-    select: false,
+    select: true,
     default: null,
     userId: userId,
     tokenCreatedAt:{
       type: Date,
+      default: null
     },
     tokenDeletedAt:{
       type: Date,
+      default: null
     }
   },
 
   refreshToken:{
     type: [String],
+    default: null
   }
 
   // resetPasswordToken: String,

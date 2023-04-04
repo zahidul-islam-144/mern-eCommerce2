@@ -9,7 +9,7 @@ userRouter.post("/register", register);
 userRouter.post("/login", login);
 userRouter.post("/forgot-password", forgotPassword);
 userRouter.get("/logout", logout);
-userRouter.get('/refresh-token', callRfreshTokenToGetAccessToken);
+userRouter.get('/send-token/:id', callRfreshTokenToGetAccessToken);
 userRouter.get("/single-user/:userId", isAuthorized, getUserDetails);
 
 

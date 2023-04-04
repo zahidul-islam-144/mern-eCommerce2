@@ -9,6 +9,9 @@ const createToken = require("../utilities/createToken");
 const resetPasswordToken = require("../utilities/resetPasswordToken");
 const sendEmail = require("../utilities/sendEmail");
 const { findOne } = require("../models/userModel");
+const { ObjectId } = require("mongodb");
+const jwt = require("jsonwebtoken");
+const { cookieOptions } = require("../utilities/jwtService");
 
 // Register a User
 exports.register = catchAsyncError(async (req, res, next) => {
@@ -27,6 +30,9 @@ exports.register = catchAsyncError(async (req, res, next) => {
       userName,
       password: result.hash,
       salt: result.salt,
+      userStatus: {
+        isRegistered: true,
+      },
     });
 
     console.log("Created-User::", user);
@@ -51,7 +57,6 @@ exports.login = catchAsyncError(async (req, res, next) => {
   const currentlyLogInUser = await User.findOne({ email: email }).select(
     "+password +salt"
   );
-  console.log("💛currentlyLogInUser:", currentlyLogInUser);
 
   const isPasswordMatched = validatePassword(
     password,
@@ -59,32 +64,17 @@ exports.login = catchAsyncError(async (req, res, next) => {
     currentlyLogInUser.salt
   );
 
-  if (!currentlyLogInUser) {
-    return next(new ErrorResponse("Invalid user !", 401));
-  }
-
-  if (!isPasswordMatched) {
-    return next(new ErrorResponse("Authentication Failed !", 401));
-  }
-
   if (currentlyLogInUser && isPasswordMatched) {
+    // console.log("💛currentlyLogInUser:", currentlyLogInUser);
     const accessToken = createToken(currentlyLogInUser, "JWT_ACCESS_TOKEN");
     const newRefreshToken = createToken(currentlyLogInUser, "REFRESH_TOKEN");
-
+    // saving into database
+    currentlyLogInUser.userStatus.isLogin = true;
+    currentlyLogInUser.userStatus.loginTime = Date.now();
     currentlyLogInUser.refreshToken = [newRefreshToken];
-    const result = await currentlyLogInUser.save()
-    console.log("💛 result:", result)
-    
-    const cookieExpiryDate = new Date(
-      Date.now() + process.env.COOKIE_EXPIRY_DAY * 60 * 60 * 1000
-    ); // 1 hour
+    const result = await currentlyLogInUser.save();
+    // console.log("💛 result:", result);
 
-    const cookieOptions = {
-      expires: cookieExpiryDate,
-      httpOnly: true,
-      secure: true,
-      sameSite: "Lax",
-    };
     console.log("💛JWT_Token:", accessToken);
     console.log("💛newRefreshToken:", newRefreshToken);
 
@@ -97,18 +87,54 @@ exports.login = catchAsyncError(async (req, res, next) => {
         message: `${currentlyLogInUser.name} successfully login.`,
         loggedin_user: currentlyLogInUser.name,
       });
+  } else {
+    return next(new ErrorResponse("Credential Mismatch!", 401));
   }
 });
 
-exports.callRfreshTokenToGetAccessToken = catchAsyncError(async (req, res, next)=>{
-  
-})
+exports.callRfreshTokenToGetAccessToken = catchAsyncError(
+  async (req, res, next) => {
+    const currentlyLogInUser = await User.findOne({
+      _id: ObjectId(req.params.id),
+    });
+    if (currentlyLogInUser.userStatus.isLogin === true) {
+      try{
+        const decodeRefreshToken = jwt.verify(
+          currentlyLogInUser.refreshToken.toString(),
+          process.env.REFRESH_TOKEN_SECRET
+        );
+        // console.log("💛 decodeRefreshToken", decodeRefreshToken);
+        // console.log("💛 decodeRefreshToken:userId", decodeRefreshToken.userId);
+        // console.log("💛 currentlyLogInUser:userId", currentlyLogInUser.userId);
+        if (decodeRefreshToken.userId === currentlyLogInUser.userId) {
+          res
+            .status(200)
+            .cookie(
+              "accessToken",
+              createToken(currentlyLogInUser, "JWT_ACCESS_TOKEN"),
+              cookieOptions
+            )
+            .json({
+              success: true,
+              isAuthorized: true,
+              message: `${currentlyLogInUser.name} successfully re-authorized.`,
+              loggedin_user: currentlyLogInUser.name,
+            })
+            .end()
+        }
+      }catch(error){
+        console.log("💛 re-authorized: error:", error)
+        // return next(new ErrorResponse('Forbidden Access! Try to login again.',403))
+      }
+    }
+  }
+);
 
 // Logout User
 exports.logout = catchAsyncError(async (req, res, next) => {
   // const deleteRefreshTokenInDB = await User.findOneAndUpdate({refreshToken: []})
   // console.log("💛deleteRefreshTokenInDB:", deleteRefreshTokenInDB)
-  
+
   res
     .status(200)
     .cookie("accessTokenen", null, {
@@ -175,6 +201,7 @@ exports.forgotPassword = catchAsyncError(async (req, res, next) => {
 exports.getUserDetails = catchAsyncError(async (req, res, next) => {
   // console.log("💛req.params.userId:", req.params.userId)
   const user = await User.findOne({ userId: req.params.userId });
+  console.log("💛 user:ud", user);
 
   res.status(200).json({
     success: true,
